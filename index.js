@@ -74,16 +74,14 @@ function drop_unnecessary_payload(message, payload) {
 
 function save_occupancy_timeouts(message) {
   for (var device in message.config.devices) {
-    if ( message.config.devices[device]["no_occupancy_since"] === undefined ) {
-      break;
-    }
-    var topic = message.config.devices[device]["friendly_name"];
-    topic = topic.split("/")[1];
-    if ( topic !== undefined ) {
-      state[topic] = message.config.devices[device]["no_occupancy_since"];
+    if ( message.config.devices[device]["no_occupancy_since"] !== undefined ) {
+      var topic = message.config.devices[device]["friendly_name"];
+      topic = topic.split("/")[1];
+      if ( topic !== undefined ) {
+        state[topic] = message.config.devices[device]["no_occupancy_since"];
+      }
     }
   }
-  console.log(state);
 }
 
 function save_state(topic, message) {
@@ -129,6 +127,7 @@ function generate_adaptive_brightness() {
   }
   brightness = Math.round(brightness / Math.PI * 100 * state.brightness.z);
   state.adaptive_brightness = brightness;
+  update_adaptive_brightness();
 }
 
 function get_adaptive_brightness(topic) {
@@ -148,16 +147,14 @@ function set_adaptive_brightness(topic, message) {
   delete message.state;
   save_state(atopic[2], message);
   for (var light in state) {
-    if (light.split('_')[1] === undefined) {
-      break;
-    }
-    if (light.split('_')[0] !== topic) {
-      break;
-    }
-    if (state[light]['state'] === 'ON') {
-      var new_message = {brightness: brightness(topic)};
-      new_topic = 'z2m_cc2652p/light/' + light + '/set';
-      client.publish(new_topic, JSON.stringify(new_message), publish_options);
+    if (light.split('_')[1] !== undefined) {
+      if (light.split('_')[0] === topic) {
+        if (state[light]['state'] === 'ON') {
+          var new_message = {brightness: brightness(topic)};
+          new_topic = 'z2m_cc2652p/light/' + light + '/set';
+          client.publish(new_topic, JSON.stringify(new_message), publish_options);
+        }
+      }
     }
   }
 }
@@ -176,15 +173,14 @@ function toggle_adaptive_brightness(topic) {
 
 function update_adaptive_brightness() {
   for (var light in state) {
-    if (light.split('_')[1] === undefined) {
-      break;
-    }
-    if ( (state[light]['state'] === 'ON')
-      && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-      var new_message = {brightness: brightness(topic)};
-      if (state[light]['brightness'] !== new_message.brightness) {
-        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-        client.publish(new_topic, JSON.stringify(new_message), publish_options);
+    if (light.split('_')[1] !== undefined) {
+      if ( (state[light]['state'] === 'ON')
+        && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
+        var new_message = {brightness: brightness(topic)};
+        if (state[light]['brightness'] !== new_message.brightness) {
+          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+          client.publish(new_topic, JSON.stringify(new_message), publish_options);
+        }
       }
     }
   }
@@ -196,18 +192,16 @@ function adjust_brightness(topic) {
     return result;
   }
   for (var light in state) {
-    if (light.split('_')[1] === undefined) {
-      break;
-    }
-    if (light.split('_')[0] !== topic) {
-      break;
-    }
-    if (state[light]['state'] === 'ON') {
-      var new_message = {brightness: brightness(topic)};
-      if (state[light]['brightness'] !== new_message.brightness) {
-        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-        client.publish(new_topic, JSON.stringify(new_message), publish_options);
-        result = true;
+    if (light.split('_')[1] !== undefined) {
+      if (light.split('_')[0] === topic) {
+        if (state[light]['state'] === 'ON') {
+          var new_message = {brightness: brightness(topic)};
+          if (state[light]['brightness'] !== new_message.brightness) {
+            var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+            client.publish(new_topic, JSON.stringify(new_message), publish_options);
+            result = true;
+          }
+        }
       }
     }
   }
@@ -224,28 +218,50 @@ function update_adaptive_lighting(topic, message) {
   }
 }
 
-function toggle_light(topic) {
+function turn_on_light(topic) {
   var message = {state: 'ON'};
-  new_topic = 'z2m_cc2652p/light/' + topic + '/set';
+  message.brightness = brightness(topic);
   if (state[topic] !== undefined) {
-    if (state[topic]['state'] === 'ON') {
-      message.state = 'OFF';
-    } else {
-      message.brightness = brightness(topic);
-      if (state[topic]['color_temp'] !== undefined) {
-        message.color_temp = state[topic]['color_temp'];
-      }
+    if (state[topic]['color_temp'] !== undefined) {
+      message.color_temp = state[topic]['color_temp'];
     }
   }
-  client.publish(new_topic, JSON.stringify(message), publish_options);
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), publish_options);
+}
+
+function turn_off_light(topic) {
+  var message = {state: 'OFF'};
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), publish_options);
+}
+
+function toggle_light(topic) {
+  if (state[topic] !== undefined) {
+    if (state[topic]['state'] === 'ON') {
+      turn_off_light(topic);
+    } else {
+      turn_on_light(topic);
+    }
+  } else {
+    turn_on_light(topic);
+  }
+}
+
+function motion_toggle_light(topic, message) {
+  if (message.occupancy === true) {
+    // turn on light
+  } else {
+    // turn off light
+  }
+  console.log('received message in topic: ' + topic);
+  console.log(JSON.stringify(message));
 }
 
 const client = mqtt.connect(server, options);
 
 client.on('connect', function () {
-  for (var topic in topics) {
-    client.subscribe(topics[topic]);
-  }
+    client.subscribe(topics);
 });
 
 client.on('message', function (topic, message) {
@@ -308,8 +324,7 @@ client.on('message', function (topic, message) {
           save_state(atopic[2], message);
           break;
         case 'motion':
-          //console.log('received message in topic: ' + topic);
-          //console.log(JSON.stringify(message));
+          motion_toggle_light(atopic[2], message);
           break;
         case 'switch':
           //console.log('received message in topic: ' + topic);
