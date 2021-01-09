@@ -23,6 +23,7 @@ const topics = [
   'virtual/light/+/set',
   'virtual/switch/+',
   'virtual/switch/+/get',
+  'z2m_cc2652p/bridge/info',
   'z2m_cc2652p/button/+',
   'z2m_cc2652p/light/+',
   'z2m_cc2652p/motion/+',
@@ -69,6 +70,10 @@ function drop_unnecessary_payload(message, payload) {
     }
   }
   return message;
+}
+
+function save_occupancy_timeouts(message) {
+  //
 }
 
 function save_state(topic, message) {
@@ -133,14 +138,16 @@ function set_adaptive_brightness(topic, message) {
   delete message.state;
   save_state(atopic[2], message);
   for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] === 'ON') {
-          var new_message = {brightness: brightness(topic)};
-          new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), publish_options);
-        }
-      }
+    if (light.split('_')[1] === undefined) {
+      break;
+    }
+    if (light.split('_')[0] !== topic) {
+      break;
+    }
+    if (state[light]['state'] === 'ON') {
+      var new_message = {brightness: brightness(topic)};
+      new_topic = 'z2m_cc2652p/light/' + light + '/set';
+      client.publish(new_topic, JSON.stringify(new_message), publish_options);
     }
   }
 }
@@ -159,14 +166,15 @@ function toggle_adaptive_brightness(topic) {
 
 function update_adaptive_brightness() {
   for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if ( (state[light]['state'] === 'ON')
-        && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-        var new_message = {brightness: brightness(topic)};
-        if (state[light]['brightness'] !== new_message.brightness) {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), publish_options);
-        }
+    if (light.split('_')[1] === undefined) {
+      break;
+    }
+    if ( (state[light]['state'] === 'ON')
+      && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
+      var new_message = {brightness: brightness(topic)};
+      if (state[light]['brightness'] !== new_message.brightness) {
+        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+        client.publish(new_topic, JSON.stringify(new_message), publish_options);
       }
     }
   }
@@ -178,16 +186,18 @@ function adjust_brightness(topic) {
     return result;
   }
   for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] === 'ON') {
-          var new_message = {brightness: brightness(topic)};
-          if (state[light]['brightness'] !== new_message.brightness) {
-            var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-            client.publish(new_topic, JSON.stringify(new_message), publish_options);
-            result = true;
-          }
-        }
+    if (light.split('_')[1] === undefined) {
+      break;
+    }
+    if (light.split('_')[0] !== topic) {
+      break;
+    }
+    if (state[light]['state'] === 'ON') {
+      var new_message = {brightness: brightness(topic)};
+      if (state[light]['brightness'] !== new_message.brightness) {
+        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+        client.publish(new_topic, JSON.stringify(new_message), publish_options);
+        result = true;
       }
     }
   }
@@ -264,6 +274,9 @@ client.on('message', function (topic, message) {
       break;
     case 'z2m_cc2652p':
       switch (atopic[1]) {
+        case 'bridge':
+          save_occupancy_timeouts(message);
+          break;
         case 'button':
           switch (message.action) {
             case 'single':
@@ -303,7 +316,6 @@ client.on('message', function (topic, message) {
       console.log(JSON.stringify(message));
       break;
   }
-
 });
 
 process.on('SIGINT', handleQuit);
