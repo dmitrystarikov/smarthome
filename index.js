@@ -83,6 +83,7 @@ function save_occupancy_timeouts(message) {
       state[topic] = message.config.devices[device]["no_occupancy_since"];
     }
   }
+  console.log(state);
 }
 
 function save_state(topic, message) {
