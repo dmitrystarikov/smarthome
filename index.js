@@ -1,4 +1,4 @@
-import { connect } from 'mqtt';
+const mqtt = require('mqtt');
 var server = 'mqtt://127.0.0.1:1883';
 var options = {
   protocolVersion: 5,
@@ -240,7 +240,7 @@ function toggle_light(topic) {
   client.publish(new_topic, JSON.stringify(message), publish_options);
 }
 
-const client = connect(server, options);
+const client = mqtt.connect(server, options);
 
 client.on('connect', function () {
   for (var topic in topics) {
