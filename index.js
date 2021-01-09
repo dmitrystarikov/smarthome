@@ -73,7 +73,16 @@ function drop_unnecessary_payload(message, payload) {
 }
 
 function save_occupancy_timeouts(message) {
-  //
+  for (var device in message.config.devices) {
+    if ( message.config.devices[device]["no_occupancy_since"] === undefined ) {
+      break;
+    }
+    var topic = message.config.devices[device]["friendly_name"];
+    topic = topic.split("/")[1];
+    if ( topic !== undefined ) {
+      state[topic] = message.config.devices[device]["no_occupancy_since"];
+    }
+  }
 }
 
 function save_state(topic, message) {
