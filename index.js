@@ -74,14 +74,19 @@ function drop_unnecessary_payload(message, payload) {
 
 function save_occupancy_timeouts(message) {
   for (var device in message.config.devices) {
-    if ( message.config.devices[device]["no_occupancy_since"] !== undefined ) {
-      var topic = message.config.devices[device]["friendly_name"];
+    var timeouts = message.config.devices[device]['no_occupancy_since'];
+    if ( timeouts !== undefined ) {
+      var topic = message.config.devices[device]['friendly_name'];
       topic = topic.split("/")[1];
       if ( topic !== undefined ) {
-        state[topic] = message.config.devices[device]["no_occupancy_since"];
+        if (state[topic] === undefined) {
+          state[topic] = {};
+        }
+        state[topic]['occupancy_timeouts'] = timeouts;
       }
     }
   }
+  console.log(state);
 }
 
 function save_state(topic, message) {
@@ -230,6 +235,10 @@ function turn_on_light(topic) {
   client.publish(topic, JSON.stringify(message), publish_options);
 }
 
+function dim_light(topic, percent) {
+  // dim light
+}
+
 function turn_off_light(topic) {
   var message = {state: 'OFF'};
   topic = 'z2m_cc2652p/light/' + topic + '/set';
@@ -251,8 +260,9 @@ function toggle_light(topic) {
 function motion_toggle_light(topic, message) {
   if (message.occupancy === true) {
     // turn on light
-  } else {
-    // turn off light
+  } else if (message.no_occupancy_since !== undefined) {
+    // if (state[topic][])
+    // turn off light / dim light
   }
   console.log('received message in topic: ' + topic);
   console.log(JSON.stringify(message));
