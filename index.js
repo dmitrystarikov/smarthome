@@ -236,7 +236,19 @@ function turn_on_light(topic) {
 }
 
 function dim_light(topic, percent) {
-  // dim light
+  var message = {state: 'ON'};
+  message.brightness = brightness(topic);
+  message.brightness = Math.round(message.brightness * percent * 100);
+  if (state[topic] === undefined) {
+    return null;
+  }
+  if (state[topic]['brightness'] === undefined) {
+    return null;
+  }
+  if (state[topic]['brightness'] !== message.brightness) {
+    topic = 'z2m_cc2652p/light/' + topic + '/set';
+    client.publish(topic, JSON.stringify(message), publish_options);
+  }
 }
 
 function turn_off_light(topic) {
@@ -259,13 +271,38 @@ function toggle_light(topic) {
 
 function motion_toggle_light(topic, message) {
   if (message.occupancy === true) {
-    // turn on light
+    if (state[topic] === undefined) {
+      state[topic] = {};
+    }
+    state[topic]['motion'] = true;
+    turn_on_light(topic);
   } else if (message.no_occupancy_since !== undefined) {
-    // if (state[topic][])
-    // turn off light / dim light
+    if (state[topic] !== undefined) {
+      var timeouts = state[topic]['occupancy_timeouts'];
+      if ( (timeouts !== undefined)
+        && (state[topic]['motion'] === true) ) {
+        if (timeouts.length > 1) {
+          if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
+            state[topic]['motion'] = false;
+            turn_off_light(topic);
+          } else {
+            for (var timeout in timeouts) {
+              if (message.no_occupancy_since === timeouts[timeout]) {
+                var percent = 1 - Math.round((timeout + 1) / timeouts.length);
+                dim_light(topic, percent);
+              }
+            }
+          }
+        } else {
+          state[topic]['motion'] = false;
+          turn_off_light(topic);
+        }
+      }
+    }
   }
   console.log('received message in topic: ' + topic);
   console.log(JSON.stringify(message));
+  console.log(state);
 }
 
 const client = mqtt.connect(server, options);
@@ -356,4 +393,5 @@ client.on('message', function (topic, message) {
 process.on('SIGINT', handleQuit);
 process.on('SIGTERM', handleQuit);
 
+generate_adaptive_brightness();
 const main = setInterval(generate_adaptive_brightness, 60 * 1000);
