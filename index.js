@@ -1,6 +1,7 @@
 const fs = require('fs');
-
+const yaml = require('yaml');
 const http = require('http');
+const mqtt = require('mqtt');
 
 var http_addr = '0.0.0.0';
 var http_port = 8080;
@@ -12,7 +13,6 @@ if (process.env.HTTP_PORT !== undefined) {
   http_port = process.env.HTTP_PORT;
 }
 
-const mqtt = require('mqtt');
 var mqtt_server = 'mqtt://127.0.0.1:1883';
 var options = {
   protocolVersion: 5,
@@ -55,15 +55,18 @@ const unnecessary_payloads = [
   'voltage'
 ];
 
-var state = {
-  brightness: {
-    up: 7,
-    down: 20,
-    z: 2.54
-  }
-};
-
-const YAML = require('yaml');
+if (fs.existsSync('./state.yml')) {
+  var state = yaml.parse(fs.readFileSync('./state.yml', 'utf8'));
+  console.log('The path exists.');
+} else {
+  var state = {
+    brightness: {
+      up: 7,
+      down: 20,
+      z: 2.54
+    }
+  };
+}
 
 var stopping = false;
 
@@ -118,7 +121,7 @@ function save_state(topic, message) {
 }
 
 function save_state_fs() {
-  fs.writeFileSync('./state.yml', YAML.stringify(state), 'utf8')
+  fs.writeFileSync('./state.yml', yaml.stringify(state), 'utf8')
 }
 
 function brightness(topic) {
@@ -414,7 +417,7 @@ client.on('message', function (topic, message) {
 const http_server = http.createServer(function(request, response) {
   response.statusCode = 200;
   response.setHeader('Content-Type', 'text/plain');
-  response.end(YAML.stringify(state));
+  response.end(yaml.stringify(state));
 });
 
 http_server.listen(http_port, http_addr);
