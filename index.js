@@ -1,5 +1,17 @@
+const http = require('http');
+
+var http_addr = '0.0.0.0';
+var http_port = 8080;
+
+if (process.env.HTTP_ADDR !== undefined) {
+  http_addr = process.env.HTTP_ADDR;
+}
+if (process.env.HTTP_PORT !== undefined) {
+  http_port = process.env.HTTP_PORT;
+}
+
 const mqtt = require('mqtt');
-var server = 'mqtt://127.0.0.1:1883';
+var mqtt_server = 'mqtt://127.0.0.1:1883';
 var options = {
   protocolVersion: 5,
   username: '',
@@ -7,7 +19,7 @@ var options = {
 };
 
 if (process.env.MQTT_SERVER !== undefined) {
-  server = process.env.MQTT_SERVER;
+  mqtt_server = process.env.MQTT_SERVER;
 }
 if (process.env.MQTT_USER !== undefined) {
   options.username = process.env.MQTT_USER;
@@ -19,6 +31,7 @@ if (process.env.MQTT_PASSWORD !== undefined) {
 publish_options = {
   qos: 2
 };
+
 const topics = [
   'virtual/light/+/set',
   'virtual/switch/+',
@@ -29,6 +42,7 @@ const topics = [
   'z2m_cc2652p/motion/+',
   'z2m_cc2652p/switch/+'
 ];
+
 const unnecessary_payloads = [
   'battery',
   'click',
@@ -41,11 +55,13 @@ const unnecessary_payloads = [
 
 var state = {
   brightness: {
-    z: 2.54,
     up: 7,
-    down: 20
+    down: 20,
+    z: 2.54
   }
 };
+
+const YAML = require('yaml');
 
 var stopping = false;
 
@@ -53,6 +69,7 @@ function handleQuit() {
   if (!stopping) {
     stopping = true;
     clearInterval(main);
+    http_server.close();
     client.end();
   }
 }
@@ -86,7 +103,6 @@ function save_occupancy_timeouts(message) {
       }
     }
   }
-  console.log(state);
 }
 
 function save_state(topic, message) {
@@ -300,12 +316,9 @@ function motion_toggle_light(topic, message) {
       }
     }
   }
-  console.log('received message in topic: ' + topic);
-  console.log(JSON.stringify(message));
-  console.log(state);
 }
 
-const client = mqtt.connect(server, options);
+const client = mqtt.connect(mqtt_server, options);
 
 client.on('connect', function () {
     client.subscribe(topics);
@@ -389,6 +402,14 @@ client.on('message', function (topic, message) {
       break;
   }
 });
+
+const http_server = http.createServer(function(request, response) {
+  response.statusCode = 200;
+  response.setHeader('Content-Type', 'text/plain');
+  response.end(YAML.stringify(state));
+});
+
+http_server.listen(http_port, http_addr);
 
 process.on('SIGINT', handleQuit);
 process.on('SIGTERM', handleQuit);
