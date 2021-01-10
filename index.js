@@ -3,61 +3,28 @@ const yaml = require('yaml');
 const http = require('http');
 const mqtt = require('mqtt');
 
-var http_addr = '0.0.0.0';
-var http_port = 8080;
-
-if (process.env.HTTP_ADDR !== undefined) {
-  http_addr = process.env.HTTP_ADDR;
+if (fs.existsSync('./config.yml')) {
+  var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
+} else {
+  var config = {
+    http_addr: '0.0.0.0',
+    http_port: 8080,
+    mqtt_server: 'mqtt://127.0.0.1:1883',
+    options: {
+      protocolVersion: 5,
+      username: '',
+      password: ''
+    },
+    publish_options: {
+      qos: 0
+    },
+    topics: [],
+    unnecessary_payloads: []
+  };
 }
-if (process.env.HTTP_PORT !== undefined) {
-  http_port = process.env.HTTP_PORT;
-}
-
-var mqtt_server = 'mqtt://127.0.0.1:1883';
-var options = {
-  protocolVersion: 5,
-  username: '',
-  password: ''
-};
-
-if (process.env.MQTT_SERVER !== undefined) {
-  mqtt_server = process.env.MQTT_SERVER;
-}
-if (process.env.MQTT_USER !== undefined) {
-  options.username = process.env.MQTT_USER;
-}
-if (process.env.MQTT_PASSWORD !== undefined) {
-  options.password = process.env.MQTT_PASSWORD;
-}
-
-publish_options = {
-  qos: 2
-};
-
-const topics = [
-  'virtual/light/+/set',
-  'virtual/switch/+',
-  'virtual/switch/+/get',
-  'z2m_cc2652p/bridge/info',
-  'z2m_cc2652p/button/+',
-  'z2m_cc2652p/light/+',
-  'z2m_cc2652p/motion/+',
-  'z2m_cc2652p/switch/+'
-];
-
-const unnecessary_payloads = [
-  'battery',
-  'click',
-  'illuminance',
-  'illuminance_lux',
-  'last_seen',
-  'linkquality',
-  'voltage'
-];
 
 if (fs.existsSync('./state.yml')) {
   var state = yaml.parse(fs.readFileSync('./state.yml', 'utf8'));
-  console.log('The path exists.');
 } else {
   var state = {
     brightness: {
@@ -93,9 +60,9 @@ function drop_unnecessary_payload(message, payload) {
       delete message[payload];
     }
   } else {
-    for (var unnecessary_payload in unnecessary_payloads) {
-      if (message[unnecessary_payloads[unnecessary_payload]] !== undefined) {
-        delete message[unnecessary_payloads[unnecessary_payload]];
+    for (var unnecessary_payload in config.unnecessary_payloads) {
+      if (message[config.unnecessary_payloads[unnecessary_payload]] !== undefined) {
+        delete message[config.unnecessary_payloads[unnecessary_payload]];
       }
     }
   }
@@ -173,7 +140,7 @@ function get_adaptive_brightness(topic) {
       message.state = state[topic]['adaptive_brightness'];
     }
     topic = 'virtual/switch/' + topic;
-    client.publish(topic, JSON.stringify(message), publish_options);
+    client.publish(topic, JSON.stringify(message), config.publish_options);
   }
 }
 
@@ -187,7 +154,7 @@ function set_adaptive_brightness(topic, message) {
         if (state[light]['state'] === 'ON') {
           var new_message = {brightness: brightness(topic)};
           new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), publish_options);
+          client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
         }
       }
     }
@@ -201,7 +168,7 @@ function toggle_adaptive_brightness(topic) {
       message.state = 'OFF';
     }
     topic = 'virtual/switch/' + topic;
-    client.publish(topic, JSON.stringify(message), publish_options);
+    client.publish(topic, JSON.stringify(message), config.publish_options);
   }
 }
 
@@ -213,7 +180,7 @@ function update_adaptive_brightness() {
         var new_message = {brightness: brightness(topic)};
         if (state[light]['brightness'] !== new_message.brightness) {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), publish_options);
+          client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
         }
       }
     }
@@ -228,9 +195,10 @@ function adjust_brightness(topic) {
         if (light.split('_')[0] === topic) {
           if (state[light]['state'] === 'ON') {
             var new_message = {brightness: brightness(topic)};
-            if (state[light]['brightness'] !== new_message.brightness) {
+            if ( (state[light]['dimmed'] !== true)
+              && (state[light]['brightness'] !== new_message.brightness) ) {
               var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-              client.publish(new_topic, JSON.stringify(new_message), publish_options);
+              client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
               result = true;
             }
           }
@@ -245,7 +213,7 @@ function update_adaptive_lighting(topic, message) {
   if (state_topic_exist(topic)) {
     if (state[topic]['state'] === 'ON') {
       topic = 'z2m_cc2652p/light/' + topic + '/set';
-      client.publish(topic, JSON.stringify(message), publish_options);
+      client.publish(topic, JSON.stringify(message), config.publish_options);
     }
   }
 }
@@ -253,31 +221,52 @@ function update_adaptive_lighting(topic, message) {
 function turn_on_light(topic) {
   var message = {state: 'ON'};
   message.brightness = brightness(topic);
-  if (state_topic_exist(topic)) {
-    if (state[topic]['color_temp'] !== undefined) {
-      message.color_temp = state[topic]['color_temp'];
+  for (var light in state) {
+    if (light.split('_')[1] !== undefined) {
+      if (light.split('_')[0] === topic) {
+        if (state[light]['state'] !== 'ON') {
+          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+          if (state[light]['color_temp'] !== undefined) {
+            message.color_temp = state[light]['color_temp'];
+          }
+          client.publish(new_topic, JSON.stringify(message), config.publish_options);
+        }
+      }
     }
   }
-  topic = 'z2m_cc2652p/light/' + topic + '/set';
-  client.publish(topic, JSON.stringify(message), publish_options);
 }
 
 function dim_light(topic, percent) {
-  var message = {state: 'ON'};
+  var message = {};
   message.brightness = brightness(topic);
   message.brightness = Math.round(message.brightness * percent * 100);
-  if (state_topic_exist(topic)) {
-    if (state[topic]['brightness'] !== message.brightness) {
-      topic = 'z2m_cc2652p/light/' + topic + '/set';
-      client.publish(topic, JSON.stringify(message), publish_options);
+  for (var light in state) {
+    if (light.split('_')[1] !== undefined) {
+      if (light.split('_')[0] === topic) {
+        if (state[light]['state'] !== 'ON') {
+          if (state[light]['brightness'] !== message.brightness) {
+            var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+            client.publish(new_topic, JSON.stringify(message), config.publish_options);
+          }
+        }
+      }
     }
   }
 }
 
 function turn_off_light(topic) {
   var message = {state: 'OFF'};
-  topic = 'z2m_cc2652p/light/' + topic + '/set';
-  client.publish(topic, JSON.stringify(message), publish_options);
+  for (var light in state) {
+    if (light.split('_')[1] !== undefined) {
+      if (light.split('_')[0] === topic) {
+        if (state[light]['state'] !== 'OFF') {
+          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+          state[light]['dimmed'] = true;
+          client.publish(new_topic, JSON.stringify(message), config.publish_options);
+        }
+      }
+    }
+  }
 }
 
 function toggle_light(topic) {
@@ -309,7 +298,7 @@ function motion_toggle_light(topic, message) {
           } else {
             for (var timeout in timeouts) {
               if (message.no_occupancy_since === timeouts[timeout]) {
-                var percent = 1 - Math.round((timeout + 1) / timeouts.length);
+                var percent = 1 - ((timeout + 1) / timeouts.length);
                 dim_light(topic, percent);
               }
             }
@@ -323,10 +312,10 @@ function motion_toggle_light(topic, message) {
   }
 }
 
-const client = mqtt.connect(mqtt_server, options);
+const client = mqtt.connect(config.mqtt_server, config.options);
 
 client.on('connect', function () {
-    client.subscribe(topics);
+    client.subscribe(config.topics);
 });
 
 client.on('message', function (topic, message) {
@@ -411,12 +400,26 @@ client.on('message', function (topic, message) {
 });
 
 const http_server = http.createServer(function(request, response) {
-  response.statusCode = 200;
-  response.setHeader('Content-Type', 'text/plain');
-  response.end(yaml.stringify(state));
+  switch (request.url) {
+    case '/config':
+      response.statusCode = 200;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end(yaml.stringify(config));
+      break;
+    case '/state':
+      response.statusCode = 200;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end(yaml.stringify(state));
+      break;
+    default:
+      response.statusCode = 404;
+      response.setHeader('Content-Type', 'text/plain');
+      response.end('404 Not found');
+      break;
+  }
 });
 
-http_server.listen(http_port, http_addr);
+http_server.listen(config.http_port, config.http_addr);
 
 process.on('SIGINT', handleQuit);
 process.on('SIGTERM', handleQuit);
