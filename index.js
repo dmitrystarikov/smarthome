@@ -1,3 +1,5 @@
+const fs = require('fs');
+
 const http = require('http');
 
 var http_addr = '0.0.0.0';
@@ -113,6 +115,10 @@ function save_state(topic, message) {
       state[topic][key] = message[key];
     }
   }
+}
+
+function save_state_fs() {
+  fs.writeFileSync('./state.yml', YAML.stringify(state), 'utf8')
 }
 
 function brightness(topic) {
@@ -401,6 +407,8 @@ client.on('message', function (topic, message) {
       console.log(JSON.stringify(message));
       break;
   }
+
+  save_state_fs();
 });
 
 const http_server = http.createServer(function(request, response) {
