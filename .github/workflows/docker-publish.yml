@@ -34,6 +34,8 @@ jobs:
           # use docker `latest` tag convention
           [ "$VERSION" == "master" ] && VERSION=latest
 
+          echo VERSION=$VERSION
+
       - name: build & push image
         run: |
           docker buildx build \
