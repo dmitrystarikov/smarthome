@@ -1,5 +1,4 @@
-ARG ARCH=
-FROM ${ARCH}node:14.15.4-alpine3.12
+FROM node:14.15.4-alpine3.12
 
 RUN npm install mqtt yaml --save
 
