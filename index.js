@@ -196,7 +196,7 @@ function adjust_brightness(topic) {
         if (light.split('_')[0] === topic) {
           if (state[light]['state'] === 'ON') {
             var new_message = {brightness: brightness(topic)};
-            if (state[light]['brightness'] !== new_message.brightness) ) {
+            if (state[light]['brightness'] !== new_message.brightness) {
               state[light]['dimmed'] = false;
               state[topic]['motion'] = false;
               var new_topic = 'z2m_cc2652p/light/' + light + '/set';
