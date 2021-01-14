@@ -1,0 +1,4 @@
+# smarthome
+
+todo:
+* [ ] write readme
