@@ -178,7 +178,8 @@ function update_adaptive_brightness() {
       if ( (state[light]['state'] === 'ON')
         && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
         var new_message = {brightness: brightness(topic)};
-        if (state[light]['brightness'] !== new_message.brightness) {
+        if ( (state[light]['dimmed'] !== true)
+          && (state[light]['brightness'] !== new_message.brightness) ) {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
           client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
         }
@@ -195,8 +196,9 @@ function adjust_brightness(topic) {
         if (light.split('_')[0] === topic) {
           if (state[light]['state'] === 'ON') {
             var new_message = {brightness: brightness(topic)};
-            if ( (state[light]['dimmed'] !== true)
-              && (state[light]['brightness'] !== new_message.brightness) ) {
+            if (state[light]['brightness'] !== new_message.brightness) ) {
+              state[light]['dimmed'] = false;
+              state[topic]['motion'] = false;
               var new_topic = 'z2m_cc2652p/light/' + light + '/set';
               client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
               result = true;
@@ -230,6 +232,10 @@ function turn_on_light(topic) {
             message.color_temp = state[light]['color_temp'];
           }
           client.publish(new_topic, JSON.stringify(message), config.publish_options);
+        } else {
+          if (state[light]['dimmed'] === true) {
+            adjust_brightness(topic);
+          }
         }
       }
     }
@@ -262,6 +268,9 @@ function turn_off_light(topic) {
       if (light.split('_')[0] === topic) {
         if (state[light]['state'] !== 'OFF') {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+          if (state[light]['dimmed'] === true) {
+            state[light]['dimmed'] = false;
+          }
           client.publish(new_topic, JSON.stringify(message), config.publish_options);
         }
       }
@@ -271,6 +280,7 @@ function turn_off_light(topic) {
 
 function toggle_light(topic) {
   if (state_topic_exist(topic)) {
+    state[topic]['motion'] = false;
     if (state[topic]['state'] === 'ON') {
       turn_off_light(topic);
     } else {
