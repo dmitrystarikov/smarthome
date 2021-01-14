@@ -246,6 +246,7 @@ function dim_light(topic, percent) {
         if (state[light]['state'] !== 'ON') {
           if (state[light]['brightness'] !== message.brightness) {
             var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+            state[light]['dimmed'] = true;
             client.publish(new_topic, JSON.stringify(message), config.publish_options);
           }
         }
@@ -261,7 +262,6 @@ function turn_off_light(topic) {
       if (light.split('_')[0] === topic) {
         if (state[light]['state'] !== 'OFF') {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          state[light]['dimmed'] = true;
           client.publish(new_topic, JSON.stringify(message), config.publish_options);
         }
       }
