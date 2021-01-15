@@ -18,6 +18,11 @@ if (fs.existsSync('./config.yml')) {
     publish_options: {
       qos: 0
     },
+    brightness: {
+      up: 6,
+      down: 18,
+      z: 2.54
+    },
     topics: [],
     unnecessary_payloads: []
   };
@@ -26,13 +31,7 @@ if (fs.existsSync('./config.yml')) {
 if (fs.existsSync('./state.yml')) {
   var state = yaml.parse(fs.readFileSync('./state.yml', 'utf8'));
 } else {
-  var state = {
-    brightness: {
-      up: 7,
-      down: 20,
-      z: 2.54
-    }
-  };
+  var state = {};
 }
 
 var stopping = false;
@@ -111,24 +110,24 @@ function generate_adaptive_brightness() {
   var date = new Date();
   var time = date.getHours() + date.getMinutes() / 60;
   var brightness = 0;
-  if ( ( (time < (state.brightness.up + state.brightness.down) / 2)
-    && (time > (state.brightness.up + state.brightness.down) / 2 - 12) )
-    || (time > (state.brightness.up + state.brightness.down) / 2 + 12) ) {
-    if (time > state.brightness.down) {
-      brightness = Math.atan(time - state.brightness.up - 24);
+  if ( ( (time < (config.brightness.up + config.brightness.down) / 2)
+    && (time > (config.brightness.up + config.brightness.down) / 2 - 12) )
+    || (time > (config.brightness.up + config.brightness.down) / 2 + 12) ) {
+    if (time > config.brightness.down) {
+      brightness = Math.atan(time - config.brightness.up - 24);
     } else {
-      brightness = Math.atan(time - state.brightness.up);
+      brightness = Math.atan(time - config.brightness.up);
     }
     brightness = Math.PI / 2 + brightness;
   } else {
-    if (time > state.brightness.up) {
-      brightness = Math.atan(time - state.brightness.down);
+    if (time > config.brightness.up) {
+      brightness = Math.atan(time - config.brightness.down);
     } else {
-      brightness = Math.atan(time - state.brightness.down + 24);
+      brightness = Math.atan(time - config.brightness.down + 24);
     }
     brightness = Math.PI / 2 - brightness;
   }
-  brightness = Math.round(brightness / Math.PI * 100 * state.brightness.z);
+  brightness = Math.round(brightness / Math.PI * 100 * config.brightness.z);
   state.adaptive_brightness = brightness;
   update_adaptive_brightness();
 }
