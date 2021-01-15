@@ -108,9 +108,6 @@ function brightness(topic) {
 }
 
 function generate_adaptive_brightness() {
-  if (state === null) {
-    return null;
-  }
   var date = new Date();
   var time = date.getHours() + date.getMinutes() / 60;
   var brightness = 0;
