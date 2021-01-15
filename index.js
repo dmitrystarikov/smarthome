@@ -108,7 +108,7 @@ function brightness(topic) {
 }
 
 function generate_adaptive_brightness() {
-  if (state === undefined) {
+  if (state === null) {
     return null;
   }
   var date = new Date();
