@@ -217,28 +217,23 @@ function update_adaptive_lighting(topic, message) {
   }
 }
 
-function turn_on_light(topic) {
+function turn_on_light(topic, bulb) {
   var message = {state: 'ON'};
   message.brightness = brightness(topic);
-  for (var light in state) {
-    if ( (light.split('_')[0] === topic)
-      && (light.split('_')[1] !== undefined) ) {
-      if (state[light]['state'] !== 'ON') {
-        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-        if (state[light]['color_temp'] !== undefined) {
-          message.color_temp = state[light]['color_temp'];
-        }
-        client.publish(new_topic, JSON.stringify(message), config.publish_options);
-      } else {
-        if (state[light]['dimmed'] === true) {
-          adjust_brightness(topic);
-        }
-      }
+  if (state_topic_exist(topic) === true) {
+    if (state[topic]['color_temp'] !== undefined) {
+      message.color_temp = state[topic]['color_temp'];
     }
   }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    state[topic]['dimmed'] = false;
+  }
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), config.publish_options);
 }
 
-function dim_light(topic, percent) {
+function dim_light(topic, percent, bulb) {
   var message = {};
   message.brightness = brightness(topic);
   message.brightness = Math.round(message.brightness * percent * 100);
@@ -256,7 +251,7 @@ function dim_light(topic, percent) {
   }
 }
 
-function turn_off_light(topic) {
+function turn_off_light(topic, bulb) {
   var message = {state: 'OFF'};
   for (var light in state) {
     if ( (light.split('_')[0] === topic)
