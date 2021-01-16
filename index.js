@@ -237,15 +237,21 @@ function dim_light(topic, percent, bulb) {
   var message = {};
   message.brightness = brightness(topic);
   message.brightness = Math.round(message.brightness * percent * 100);
-  for (var light in state) {
-    if ( (light.split('_')[0] === topic)
-      && (light.split('_')[1] !== undefined) ) {
-      if (state[light]['state'] !== 'ON') {
-        if (state[light]['brightness'] !== message.brightness) {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          state[light]['dimmed'] = true;
-          client.publish(new_topic, JSON.stringify(message), config.publish_options);
-        }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    if (state_topic_exist(topic) === true) {
+      if ( (state[topic]['state'] === 'ON')
+        && (state[topic]['brightness'] !== message.brightness) ) {
+        state[topic]['dimmed'] = true;
+        topic = 'z2m_cc2652p/light/' + topic + '/set';
+        client.publish(topic, JSON.stringify(message), config.publish_options);
+      }
+    }
+  } else {
+    for (var light in state) {
+      if ( (light.split('_')[0] === topic)
+        && (light.split('_')[1] !== undefined) ) {
+        dim_light(topic, percent, light.split('_')[1])
       }
     }
   }
