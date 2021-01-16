@@ -175,11 +175,11 @@ function update_adaptive_brightness() {
     if (light.split('_')[1] !== undefined) {
       if ( (state[light]['state'] === 'ON')
         && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-        var new_message = {brightness: brightness(topic)};
+        var message = {brightness: brightness(topic)};
         if ( (state[light]['dimmed'] !== true)
-          && (state[light]['brightness'] !== new_message.brightness) ) {
+          && (state[light]['brightness'] !== message.brightness) ) {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
+          client.publish(new_topic, JSON.stringify(message), config.publish_options);
         }
       }
     }
@@ -193,12 +193,12 @@ function adjust_brightness(topic) {
       if ( (light.split('_')[0] === topic)
         && (light.split('_')[1] !== undefined) ) {
         if (state[light]['state'] === 'ON') {
-          var new_message = {brightness: brightness(topic)};
-          if (state[light]['brightness'] !== new_message.brightness) {
+          var message = {brightness: brightness(topic)};
+          if (state[light]['brightness'] !== message.brightness) {
             state[light]['dimmed'] = false;
             state[topic]['motion'] = false;
             var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-            client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
+            client.publish(new_topic, JSON.stringify(message), config.publish_options);
             result = true;
           }
         }
@@ -284,7 +284,13 @@ function motion_toggle_light(topic, message) {
   if (message.occupancy === true) {
     state_topic_exist(topic);
     state[topic]['motion'] = true;
-    turn_on_light(topic);
+    if (config.motion_toggleable_lights[topic] !== undefined) {
+      for (var bulb of config.motion_toggleable_lights[topic]) {
+        turn_on_light(topic, bulb);
+      }
+    } else {
+      turn_on_light(topic);
+    }
   } else if (message.no_occupancy_since !== undefined) {
     if (state_topic_exist(topic)) {
       var timeouts = state[topic]['occupancy_timeouts'];
@@ -293,18 +299,36 @@ function motion_toggle_light(topic, message) {
         if (timeouts.length > 1) {
           if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
             state[topic]['motion'] = false;
-            turn_off_light(topic);
+            if (config.motion_toggleable_lights[topic] !== undefined) {
+              for (var bulb of config.motion_toggleable_lights[topic]) {
+                turn_off_light(topic, bulb);
+              }
+            } else {
+              turn_off_light(topic);
+            }
           } else {
             for (var timeout in timeouts) {
               if (message.no_occupancy_since === timeouts[timeout]) {
                 var percent = 1 - ((timeout + 1) / timeouts.length);
-                dim_light(topic, percent);
+                if (config.motion_toggleable_lights[topic] !== undefined) {
+                  for (var bulb of config.motion_toggleable_lights[topic]) {
+                    dim_light(topic, percent, bulb);
+                  }
+                } else {
+                  dim_light(topic, percent);
+                }
               }
             }
           }
         } else {
           state[topic]['motion'] = false;
-          turn_off_light(topic);
+          if (config.motion_toggleable_lights[topic] !== undefined) {
+            for (var bulb of config.motion_toggleable_lights[topic]) {
+              turn_off_light(topic, bulb);
+            }
+          } else {
+            turn_off_light(topic);
+          }
         }
       }
     }
