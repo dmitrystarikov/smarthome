@@ -253,18 +253,12 @@ function dim_light(topic, percent, bulb) {
 
 function turn_off_light(topic, bulb) {
   var message = {state: 'OFF'};
-  for (var light in state) {
-    if ( (light.split('_')[0] === topic)
-      && (light.split('_')[1] !== undefined) ) {
-      if (state[light]['state'] !== 'OFF') {
-        var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-        if (state[light]['dimmed'] === true) {
-          state[light]['dimmed'] = false;
-        }
-        client.publish(new_topic, JSON.stringify(message), config.publish_options);
-      }
-    }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    state[topic]['dimmed'] = false;
   }
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), config.publish_options);
 }
 
 function toggle_light(topic) {
