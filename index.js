@@ -100,7 +100,14 @@ function save_state_fs() {
 }
 
 function updateSunTimes() {
-  state.sunTimes = suncalc.getTimes(new Date(), config.latitude, config.longitude);
+  var now = new Date()
+  state.sunTimes = suncalc.getTimes(now, config.latitude, config.longitude);
+  if ( (now > state.sunTimes.sunriseEnd)
+    && (now < state.sunTimes.sunsetStart) ) {
+    state.night = false;
+  } else {
+    state.night = true;
+  }
 }
 
 function brightness(topic) {
@@ -290,14 +297,20 @@ function toggle_light(topic) {
 
 function motion_toggle_light(topic, message) {
   if (message.occupancy === true) {
-    state_topic_exist(topic);
-    state[topic]['motion'] = true;
-    if (config.motion_toggleable_lights[topic] !== undefined) {
-      for (var bulb of config.motion_toggleable_lights[topic]) {
-        turn_on_light(topic, bulb);
+    if ( (config.motion[topic] === undefined)
+      || (config.motion[topic]['night'] !== true)
+      || ( (config.motion[topic]['night'] === true)
+        && (state.night === true) ) ) {
+      state_topic_exist(topic);
+      state[topic]['motion'] = true;
+      if ( (config.motion[topic] !== undefined)
+        && (config.motion[topic][toggleable_lights] !== undefined) ) {
+        for (var bulb of config.motion[topic][toggleable_lights]) {
+          turn_on_light(topic, bulb);
+        }
+      } else {
+        turn_on_light(topic);
       }
-    } else {
-      turn_on_light(topic);
     }
   } else if (message.no_occupancy_since !== undefined) {
     if (state_topic_exist(topic)) {
@@ -307,8 +320,9 @@ function motion_toggle_light(topic, message) {
         if (timeouts.length > 1) {
           if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
             state[topic]['motion'] = false;
-            if (config.motion_toggleable_lights[topic] !== undefined) {
-              for (var bulb of config.motion_toggleable_lights[topic]) {
+            if ( (config.motion[topic] !== undefined)
+              && (config.motion[topic][toggleable_lights] !== undefined) ) {
+              for (var bulb of config.motion[topic][toggleable_lights]) {
                 turn_off_light(topic, bulb);
               }
             } else {
@@ -318,8 +332,9 @@ function motion_toggle_light(topic, message) {
             for (var timeout in timeouts) {
               if (message.no_occupancy_since === timeouts[timeout]) {
                 var percent = 1 - ((timeout + 1) / timeouts.length);
-                if (config.motion_toggleable_lights[topic] !== undefined) {
-                  for (var bulb of config.motion_toggleable_lights[topic]) {
+                if ( (config.motion[topic] !== undefined)
+                  && (config.motion[topic][toggleable_lights] !== undefined) ) {
+                  for (var bulb of config.motion[topic][toggleable_lights]) {
                     dim_light(topic, percent, bulb);
                   }
                 } else {
@@ -330,8 +345,9 @@ function motion_toggle_light(topic, message) {
           }
         } else {
           state[topic]['motion'] = false;
-          if (config.motion_toggleable_lights[topic] !== undefined) {
-            for (var bulb of config.motion_toggleable_lights[topic]) {
+          if ( (config.motion[topic] !== undefined)
+            && (config.motion[topic][toggleable_lights] !== undefined) ) {
+            for (var bulb of config.motion[topic][toggleable_lights]) {
               turn_off_light(topic, bulb);
             }
           } else {
@@ -460,4 +476,5 @@ function app() {
   generate_adaptive_brightness();
 }
 
+app();
 const main = setInterval(app, 60 * 1000);
