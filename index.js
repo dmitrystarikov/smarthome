@@ -189,11 +189,11 @@ function update_adaptive_brightness() {
     if (light.split('_')[1] !== undefined) {
       if ( (state[light]['state'] === 'ON')
         && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-        var message = {brightness: brightness(topic)};
+        var message = {brightness: brightness(light)};
         if ( (state[light]['dimmed'] !== true)
           && (state[light]['brightness'] !== message.brightness) ) {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(message), config.publish_options);
+          var topic = 'z2m_cc2652p/light/' + light + '/set';
+          client.publish(topic, JSON.stringify(message), config.publish_options);
         }
       }
     }
