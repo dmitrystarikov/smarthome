@@ -303,10 +303,13 @@ function motion_toggle_light(topic, message) {
         && (state.night === true) ) ) {
       state_topic_exist(topic);
       state[topic]['motion'] = true;
-      if ( (config.motion[topic] !== undefined)
-        && (config.motion[topic][toggleable_lights] !== undefined) ) {
-        for (var bulb of config.motion[topic][toggleable_lights]) {
-          turn_on_light(topic, bulb);
+      if (config.motion[topic] !== undefined) {
+        if (config.motion[topic][toggleable_lights] !== undefined) {
+          for (var bulb of config.motion[topic][toggleable_lights]) {
+            turn_on_light(topic, bulb);
+          }
+        } else {
+          turn_on_light(topic);
         }
       } else {
         turn_on_light(topic);
@@ -320,10 +323,13 @@ function motion_toggle_light(topic, message) {
         if (timeouts.length > 1) {
           if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
             state[topic]['motion'] = false;
-            if ( (config.motion[topic] !== undefined)
-              && (config.motion[topic][toggleable_lights] !== undefined) ) {
-              for (var bulb of config.motion[topic][toggleable_lights]) {
-                turn_off_light(topic, bulb);
+            if (config.motion[topic] !== undefined) {
+              if (config.motion[topic][toggleable_lights] !== undefined) {
+                for (var bulb of config.motion[topic][toggleable_lights]) {
+                  turn_off_light(topic, bulb);
+                }
+              } else {
+                turn_off_light(topic);
               }
             } else {
               turn_off_light(topic);
@@ -332,10 +338,13 @@ function motion_toggle_light(topic, message) {
             for (var timeout in timeouts) {
               if (message.no_occupancy_since === timeouts[timeout]) {
                 var percent = 1 - ((timeout + 1) / timeouts.length);
-                if ( (config.motion[topic] !== undefined)
-                  && (config.motion[topic][toggleable_lights] !== undefined) ) {
-                  for (var bulb of config.motion[topic][toggleable_lights]) {
-                    dim_light(topic, percent, bulb);
+                if (config.motion[topic] !== undefined) {
+                  if (config.motion[topic][toggleable_lights] !== undefined) {
+                    for (var bulb of config.motion[topic][toggleable_lights]) {
+                      dim_light(topic, percent, bulb);
+                    }
+                  } else {
+                    dim_light(topic, percent);
                   }
                 } else {
                   dim_light(topic, percent);
@@ -345,10 +354,13 @@ function motion_toggle_light(topic, message) {
           }
         } else {
           state[topic]['motion'] = false;
-          if ( (config.motion[topic] !== undefined)
-            && (config.motion[topic][toggleable_lights] !== undefined) ) {
-            for (var bulb of config.motion[topic][toggleable_lights]) {
-              turn_off_light(topic, bulb);
+          if (config.motion[topic] !== undefined) {
+            if (config.motion[topic][toggleable_lights] !== undefined) {
+              for (var bulb of config.motion[topic][toggleable_lights]) {
+                turn_off_light(topic, bulb);
+              }
+            } else {
+              turn_off_light(topic);
             }
           } else {
             turn_off_light(topic);
