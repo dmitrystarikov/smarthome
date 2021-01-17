@@ -2,6 +2,7 @@ const fs = require('fs');
 const yaml = require('yaml');
 const http = require('http');
 const mqtt = require('mqtt');
+const suncalc = require('suncalc');
 
 if (fs.existsSync('./config.yml')) {
   var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
@@ -23,6 +24,8 @@ if (fs.existsSync('./config.yml')) {
       down: 18,
       z: 2.54
     },
+    latitude: 0,
+    longitude: 0,
     topics: [],
     unnecessary_payloads: []
   };
@@ -94,6 +97,10 @@ function save_state(topic, message) {
 
 function save_state_fs() {
   fs.writeFileSync('./state.yml', yaml.stringify(state), 'utf8')
+}
+
+function updateSunTimes() {
+  state.sunTimes = suncalc.getTimes(new Date(), config.latitude, config.longitude);
 }
 
 function brightness(topic) {
@@ -227,6 +234,7 @@ function turn_on_light(topic, bulb) {
   }
   if (bulb !== undefined) {
     topic = topic + '_' + bulb;
+    state_topic_exist(topic);
     state[topic]['dimmed'] = false;
   }
   topic = 'z2m_cc2652p/light/' + topic + '/set';
@@ -447,5 +455,9 @@ http_server.listen(config.http_port, config.http_addr);
 process.on('SIGINT', handleQuit);
 process.on('SIGTERM', handleQuit);
 
-generate_adaptive_brightness();
-const main = setInterval(generate_adaptive_brightness, 60 * 1000);
+function app() {
+  updateSunTimes();
+  generate_adaptive_brightness();
+}
+
+const main = setInterval(app, 60 * 1000);
