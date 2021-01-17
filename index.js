@@ -2,6 +2,7 @@ const fs = require('fs');
 const yaml = require('yaml');
 const http = require('http');
 const mqtt = require('mqtt');
+const suncalc = require('suncalc');
 
 if (fs.existsSync('./config.yml')) {
   var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
@@ -18,6 +19,13 @@ if (fs.existsSync('./config.yml')) {
     publish_options: {
       qos: 0
     },
+    brightness: {
+      up: 6,
+      down: 18,
+      z: 2.54
+    },
+    latitude: 0,
+    longitude: 0,
     topics: [],
     unnecessary_payloads: []
   };
@@ -26,13 +34,7 @@ if (fs.existsSync('./config.yml')) {
 if (fs.existsSync('./state.yml')) {
   var state = yaml.parse(fs.readFileSync('./state.yml', 'utf8'));
 } else {
-  var state = {
-    brightness: {
-      up: 7,
-      down: 20,
-      z: 2.54
-    }
-  };
+  var state = {};
 }
 
 var stopping = false;
@@ -97,6 +99,17 @@ function save_state_fs() {
   fs.writeFileSync('./state.yml', yaml.stringify(state), 'utf8')
 }
 
+function updateSunTimes() {
+  var now = new Date()
+  state.sunTimes = suncalc.getTimes(now, config.latitude, config.longitude);
+  if ( (now > state.sunTimes.sunriseEnd)
+    && (now < state.sunTimes.sunsetStart) ) {
+    state.night = false;
+  } else {
+    state.night = true;
+  }
+}
+
 function brightness(topic) {
   var brightness = 254;
   if (state_topic_exist(topic)) {
@@ -111,24 +124,24 @@ function generate_adaptive_brightness() {
   var date = new Date();
   var time = date.getHours() + date.getMinutes() / 60;
   var brightness = 0;
-  if ( ( (time < (state.brightness.up + state.brightness.down) / 2)
-    && (time > (state.brightness.up + state.brightness.down) / 2 - 12) )
-    || (time > (state.brightness.up + state.brightness.down) / 2 + 12) ) {
-    if (time > state.brightness.down) {
-      brightness = Math.atan(time - state.brightness.up - 24);
+  if ( ( (time < (config.brightness.up + config.brightness.down) / 2)
+    && (time > (config.brightness.up + config.brightness.down) / 2 - 12) )
+    || (time > (config.brightness.up + config.brightness.down) / 2 + 12) ) {
+    if (time > config.brightness.down) {
+      brightness = Math.atan(time - config.brightness.up - 24);
     } else {
-      brightness = Math.atan(time - state.brightness.up);
+      brightness = Math.atan(time - config.brightness.up);
     }
     brightness = Math.PI / 2 + brightness;
   } else {
-    if (time > state.brightness.up) {
-      brightness = Math.atan(time - state.brightness.down);
+    if (time > config.brightness.up) {
+      brightness = Math.atan(time - config.brightness.down);
     } else {
-      brightness = Math.atan(time - state.brightness.down + 24);
+      brightness = Math.atan(time - config.brightness.down + 24);
     }
     brightness = Math.PI / 2 - brightness;
   }
-  brightness = Math.round(brightness / Math.PI * 100 * state.brightness.z);
+  brightness = Math.round(brightness / Math.PI * 100 * config.brightness.z);
   state.adaptive_brightness = brightness;
   update_adaptive_brightness();
 }
@@ -149,13 +162,12 @@ function set_adaptive_brightness(topic, message) {
   delete message.state;
   save_state(atopic[2], message);
   for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] === 'ON') {
-          var new_message = {brightness: brightness(topic)};
-          new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
-        }
+    if ( (light.split('_')[0] === topic)
+      && (light.split('_')[1] !== undefined) ) {
+      if (state[light]['state'] === 'ON') {
+        var new_message = {brightness: brightness(topic)};
+        new_topic = 'z2m_cc2652p/light/' + light + '/set';
+        client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
       }
     }
   }
@@ -177,11 +189,11 @@ function update_adaptive_brightness() {
     if (light.split('_')[1] !== undefined) {
       if ( (state[light]['state'] === 'ON')
         && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-        var new_message = {brightness: brightness(topic)};
+        var message = {brightness: brightness(topic)};
         if ( (state[light]['dimmed'] !== true)
-          && (state[light]['brightness'] !== new_message.brightness) ) {
+          && (state[light]['brightness'] !== message.brightness) ) {
           var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
+          client.publish(new_topic, JSON.stringify(message), config.publish_options);
         }
       }
     }
@@ -192,17 +204,16 @@ function adjust_brightness(topic) {
   var result = false;
   if (state_topic_exist(topic)) {
     for (var light in state) {
-      if (light.split('_')[1] !== undefined) {
-        if (light.split('_')[0] === topic) {
-          if (state[light]['state'] === 'ON') {
-            var new_message = {brightness: brightness(topic)};
-            if (state[light]['brightness'] !== new_message.brightness) {
-              state[light]['dimmed'] = false;
-              state[topic]['motion'] = false;
-              var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-              client.publish(new_topic, JSON.stringify(new_message), config.publish_options);
-              result = true;
-            }
+      if ( (light.split('_')[0] === topic)
+        && (light.split('_')[1] !== undefined) ) {
+        if (state[light]['state'] === 'ON') {
+          var message = {brightness: brightness(topic)};
+          if (state[light]['brightness'] !== message.brightness) {
+            state[light]['dimmed'] = false;
+            state[topic]['motion'] = false;
+            var new_topic = 'z2m_cc2652p/light/' + light + '/set';
+            client.publish(new_topic, JSON.stringify(message), config.publish_options);
+            result = true;
           }
         }
       }
@@ -220,62 +231,55 @@ function update_adaptive_lighting(topic, message) {
   }
 }
 
-function turn_on_light(topic) {
+function turn_on_light(topic, bulb) {
   var message = {state: 'ON'};
   message.brightness = brightness(topic);
-  for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] !== 'ON') {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          if (state[light]['color_temp'] !== undefined) {
-            message.color_temp = state[light]['color_temp'];
-          }
-          client.publish(new_topic, JSON.stringify(message), config.publish_options);
-        } else {
-          if (state[light]['dimmed'] === true) {
-            adjust_brightness(topic);
-          }
-        }
-      }
+  if (state_topic_exist(topic) === true) {
+    if (state[topic]['color_temp'] !== undefined) {
+      message.color_temp = state[topic]['color_temp'];
     }
   }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    state_topic_exist(topic);
+    state[topic]['dimmed'] = false;
+  }
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), config.publish_options);
 }
 
-function dim_light(topic, percent) {
+function dim_light(topic, percent, bulb) {
   var message = {};
   message.brightness = brightness(topic);
   message.brightness = Math.round(message.brightness * percent * 100);
-  for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] !== 'ON') {
-          if (state[light]['brightness'] !== message.brightness) {
-            var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-            state[light]['dimmed'] = true;
-            client.publish(new_topic, JSON.stringify(message), config.publish_options);
-          }
-        }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    if (state_topic_exist(topic) === true) {
+      if ( (state[topic]['state'] === 'ON')
+        && (state[topic]['brightness'] !== message.brightness) ) {
+        state[topic]['dimmed'] = true;
+        topic = 'z2m_cc2652p/light/' + topic + '/set';
+        client.publish(topic, JSON.stringify(message), config.publish_options);
+      }
+    }
+  } else {
+    for (var light in state) {
+      if ( (light.split('_')[0] === topic)
+        && (light.split('_')[1] !== undefined) ) {
+        dim_light(topic, percent, light.split('_')[1])
       }
     }
   }
 }
 
-function turn_off_light(topic) {
+function turn_off_light(topic, bulb) {
   var message = {state: 'OFF'};
-  for (var light in state) {
-    if (light.split('_')[1] !== undefined) {
-      if (light.split('_')[0] === topic) {
-        if (state[light]['state'] !== 'OFF') {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          if (state[light]['dimmed'] === true) {
-            state[light]['dimmed'] = false;
-          }
-          client.publish(new_topic, JSON.stringify(message), config.publish_options);
-        }
-      }
-    }
+  if (bulb !== undefined) {
+    topic = topic + '_' + bulb;
+    state[topic]['dimmed'] = false;
   }
+  topic = 'z2m_cc2652p/light/' + topic + '/set';
+  client.publish(topic, JSON.stringify(message), config.publish_options);
 }
 
 function toggle_light(topic) {
@@ -293,9 +297,21 @@ function toggle_light(topic) {
 
 function motion_toggle_light(topic, message) {
   if (message.occupancy === true) {
-    state_topic_exist(topic);
-    state[topic]['motion'] = true;
-    turn_on_light(topic);
+    if ( (config.motion[topic] === undefined)
+      || (config.motion[topic]['night'] !== true)
+      || ( (config.motion[topic]['night'] === true)
+        && (state.night === true) ) ) {
+      state_topic_exist(topic);
+      state[topic]['motion'] = true;
+      if ( (config.motion[topic] !== undefined)
+        && (config.motion[topic][toggleable_lights] !== undefined) ) {
+        for (var bulb of config.motion[topic][toggleable_lights]) {
+          turn_on_light(topic, bulb);
+        }
+      } else {
+        turn_on_light(topic);
+      }
+    }
   } else if (message.no_occupancy_since !== undefined) {
     if (state_topic_exist(topic)) {
       var timeouts = state[topic]['occupancy_timeouts'];
@@ -304,18 +320,39 @@ function motion_toggle_light(topic, message) {
         if (timeouts.length > 1) {
           if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
             state[topic]['motion'] = false;
-            turn_off_light(topic);
+            if ( (config.motion[topic] !== undefined)
+              && (config.motion[topic][toggleable_lights] !== undefined) ) {
+              for (var bulb of config.motion[topic][toggleable_lights]) {
+                turn_off_light(topic, bulb);
+              }
+            } else {
+              turn_off_light(topic);
+            }
           } else {
             for (var timeout in timeouts) {
               if (message.no_occupancy_since === timeouts[timeout]) {
                 var percent = 1 - ((timeout + 1) / timeouts.length);
-                dim_light(topic, percent);
+                if ( (config.motion[topic] !== undefined)
+                  && (config.motion[topic][toggleable_lights] !== undefined) ) {
+                  for (var bulb of config.motion[topic][toggleable_lights]) {
+                    dim_light(topic, percent, bulb);
+                  }
+                } else {
+                  dim_light(topic, percent);
+                }
               }
             }
           }
         } else {
           state[topic]['motion'] = false;
-          turn_off_light(topic);
+          if ( (config.motion[topic] !== undefined)
+            && (config.motion[topic][toggleable_lights] !== undefined) ) {
+            for (var bulb of config.motion[topic][toggleable_lights]) {
+              turn_off_light(topic, bulb);
+            }
+          } else {
+            turn_off_light(topic);
+          }
         }
       }
     }
@@ -434,5 +471,10 @@ http_server.listen(config.http_port, config.http_addr);
 process.on('SIGINT', handleQuit);
 process.on('SIGTERM', handleQuit);
 
-generate_adaptive_brightness();
-const main = setInterval(generate_adaptive_brightness, 60 * 1000);
+function app() {
+  updateSunTimes();
+  generate_adaptive_brightness();
+}
+
+app();
+const main = setInterval(app, 60 * 1000);
