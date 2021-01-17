@@ -304,8 +304,8 @@ function motion_toggle_light(topic, message) {
       state_topic_exist(topic);
       state[topic]['motion'] = true;
       if (config.motion[topic] !== undefined) {
-        if (config.motion[topic][toggleable_lights] !== undefined) {
-          for (var bulb of config.motion[topic][toggleable_lights]) {
+        if (config.motion[topic]['toggleable_lights'] !== undefined) {
+          for (var bulb of config.motion[topic]['toggleable_lights']) {
             turn_on_light(topic, bulb);
           }
         } else {
@@ -324,8 +324,8 @@ function motion_toggle_light(topic, message) {
           if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
             state[topic]['motion'] = false;
             if (config.motion[topic] !== undefined) {
-              if (config.motion[topic][toggleable_lights] !== undefined) {
-                for (var bulb of config.motion[topic][toggleable_lights]) {
+              if (config.motion[topic]['toggleable_lights'] !== undefined) {
+                for (var bulb of config.motion[topic]['toggleable_lights']) {
                   turn_off_light(topic, bulb);
                 }
               } else {
@@ -339,8 +339,8 @@ function motion_toggle_light(topic, message) {
               if (message.no_occupancy_since === timeouts[timeout]) {
                 var percent = 1 - ((timeout + 1) / timeouts.length);
                 if (config.motion[topic] !== undefined) {
-                  if (config.motion[topic][toggleable_lights] !== undefined) {
-                    for (var bulb of config.motion[topic][toggleable_lights]) {
+                  if (config.motion[topic]['toggleable_lights'] !== undefined) {
+                    for (var bulb of config.motion[topic]['toggleable_lights']) {
                       dim_light(topic, percent, bulb);
                     }
                   } else {
@@ -355,8 +355,8 @@ function motion_toggle_light(topic, message) {
         } else {
           state[topic]['motion'] = false;
           if (config.motion[topic] !== undefined) {
-            if (config.motion[topic][toggleable_lights] !== undefined) {
-              for (var bulb of config.motion[topic][toggleable_lights]) {
+            if (config.motion[topic]['toggleable_lights'] !== undefined) {
+              for (var bulb of config.motion[topic]['toggleable_lights']) {
                 turn_off_light(topic, bulb);
               }
             } else {
