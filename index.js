@@ -8,24 +8,24 @@ if (fs.existsSync('./config.yml')) {
   var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
 } else {
   var config = {
+    brightness: {
+      down: 18,
+      up: 6,
+      z: 2.54
+    },
     http_addr: '0.0.0.0',
     http_port: 8080,
+    latitude: 0,
+    longitude: 0,
     mqtt_server: 'mqtt://127.0.0.1:1883',
     options: {
+      password: '',
       protocolVersion: 5,
-      username: '',
-      password: ''
+      username: ''
     },
     publish_options: {
       qos: 0
     },
-    brightness: {
-      up: 6,
-      down: 18,
-      z: 2.54
-    },
-    latitude: 0,
-    longitude: 0,
     topics: [],
     unnecessary_payloads: []
   };
