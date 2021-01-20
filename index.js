@@ -63,7 +63,11 @@ function sortJSON(object) {
   keys = keys.sort();
   var newObject = {};
   for (var i = 0; i < keys.length; i++) {
-    newObject[keys[i]] = sortJSON(object[keys[i]])
+    if (keys[i] != 'sunTimes') {
+      newObject[keys[i]] = sortJSON(object[keys[i]]);
+    } else {
+      newObject[keys[i]] = object[keys[i]];
+    }
   }
   return newObject;
 }
@@ -134,7 +138,7 @@ function updateSunTimes() {
 function brightness(topic) {
   var brightness = 254;
   if (state_topic_exist(topic)) {
-    if (state[topic]['adaptive_brightness'] === 'ON') {
+    if (state[topic.split('_')[0]]['adaptive_brightness'] === 'ON') {
       brightness = state.adaptive_brightness;
     }
   }
@@ -270,10 +274,10 @@ function turn_on_light(topic, bulb) {
 }
 
 function dim_light(topic, percent, bulb) {
-  var message = {};
-  message.brightness = brightness(topic);
-  message.brightness = Math.round(message.brightness * percent * 100);
   if (bulb !== undefined) {
+    var message = {};
+    message.brightness = brightness(topic);
+    message.brightness = Math.round(message.brightness * percent * 100);
     topic = topic + '_' + bulb;
     if (state_topic_exist(topic) === true) {
       if ( (state[topic]['state'] === 'ON')
