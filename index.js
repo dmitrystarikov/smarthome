@@ -48,6 +48,26 @@ function handleQuit() {
   }
 }
 
+function sortJSON(object) {
+  if (object instanceof Array) {
+    for (var i = 0; i < object.length; i++) {
+      object[i] = sortJSON(object[i]);
+    }
+    return object;
+  } else {
+    if (typeof object != "object") {
+      return object;
+    }
+  }
+  var keys = Object.keys(object);
+  keys = keys.sort();
+  var newObject = {};
+  for (var i = 0; i < keys.length; i++) {
+    newObject[keys[i]] = sortJSON(object[keys[i]])
+  }
+  return newObject;
+}
+
 function state_topic_exist(topic) {
   if (state[topic] === undefined) {
     state[topic] = {};
@@ -93,6 +113,7 @@ function save_state(topic, message) {
   } else {
     state[topic] = message;
   }
+  state = sortJSON(state);
 }
 
 function save_state_fs() {
