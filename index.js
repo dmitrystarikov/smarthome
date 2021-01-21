@@ -1,8 +1,23 @@
 const fs = require('fs');
-const yaml = require('yaml');
 const http = require('http');
 const mqtt = require('mqtt');
 const suncalc = require('suncalc');
+const winston = require('winston');
+const yaml = require('yaml');
+
+var level = 'info';
+if (process.env.LOG_LEVEL !== undefined) {
+  level = process.env.LOG_LEVEL;
+}
+const levels = ['info', 'error', 'warn', 'debug'];
+if (!(levels.includes(level))) {
+  console.log(level + ' is not a valid log_level, use one of ' + levels.join(', '));
+}
+
+const logger = winston.createLogger({
+  level: level,
+  transports: [new winston.transports.Console()]
+});
 
 if (fs.existsSync('./config.yml')) {
   var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
@@ -331,12 +346,15 @@ function motion_toggle_light(topic, message) {
       if (config.motion[topic] !== undefined) {
         if (config.motion[topic]['toggleable_lights'] !== undefined) {
           for (var bulb of config.motion[topic]['toggleable_lights']) {
+            logger.info('turning on light ' + topic + ' ' + bulb);
             turn_on_light(topic, bulb);
           }
         } else {
+          logger.info('turning on light ' + topic);
           turn_on_light(topic);
         }
       } else {
+        logger.info('turning on light ' + topic);
         turn_on_light(topic);
       }
     }
@@ -345,50 +363,41 @@ function motion_toggle_light(topic, message) {
       var timeouts = state[topic]['occupancy_timeouts'];
       if ( (timeouts !== undefined)
         && (state[topic]['motion'] === true) ) {
-        if (timeouts.length > 1) {
-          if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
-            state[topic]['motion'] = false;
-            if (config.motion[topic] !== undefined) {
-              if (config.motion[topic]['toggleable_lights'] !== undefined) {
-                for (var bulb of config.motion[topic]['toggleable_lights']) {
-                  turn_off_light(topic, bulb);
-                }
-              } else {
-                turn_off_light(topic);
-              }
-            } else {
-              turn_off_light(topic);
-            }
-          } else {
-            for (var timeout in timeouts) {
-              if (message.no_occupancy_since === timeouts[timeout]) {
-                var percent = 1 - ((timeout + 1) / timeouts.length);
-                if (config.motion[topic] !== undefined) {
-                  if (config.motion[topic]['toggleable_lights'] !== undefined) {
-                    for (var bulb of config.motion[topic]['toggleable_lights']) {
-                      dim_light(topic, percent, bulb);
-                    }
-                  } else {
-                    dim_light(topic, percent);
-                  }
-                } else {
-                  dim_light(topic, percent);
-                }
-              }
-            }
-          }
-        } else {
+        if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
           state[topic]['motion'] = false;
           if (config.motion[topic] !== undefined) {
             if (config.motion[topic]['toggleable_lights'] !== undefined) {
               for (var bulb of config.motion[topic]['toggleable_lights']) {
+                logger.info('turning off light ' + topic + ' ' + bulb);
                 turn_off_light(topic, bulb);
               }
             } else {
+              logger.info('turning off light ' + topic);
               turn_off_light(topic);
             }
           } else {
+            logger.info('turning off light ' + topic);
             turn_off_light(topic);
+          }
+        } else {
+          for (var timeout in timeouts) {
+            if (message.no_occupancy_since === timeouts[timeout]) {
+              var percent = 1 - ((timeout + 1) / timeouts.length);
+              if (config.motion[topic] !== undefined) {
+                if (config.motion[topic]['toggleable_lights'] !== undefined) {
+                  for (var bulb of config.motion[topic]['toggleable_lights']) {
+                    logger.info('dimming light ' + topic + ' ' + bulb);
+                    dim_light(topic, percent, bulb);
+                  }
+                } else {
+                  logger.info('dimming light ' + topic);
+                  dim_light(topic, percent);
+                }
+              } else {
+                logger.info('dimming light ' + topic);
+                dim_light(topic, percent);
+              }
+            }
           }
         }
       }
@@ -431,8 +440,8 @@ client.on('message', function (topic, message) {
           }
           break;
         default:
-          console.log('received message in unexpected topic: ' + topic);
-          console.log(JSON.stringify(message));
+          logger.warn('received message in unexpected topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
       }
       break;
@@ -452,8 +461,8 @@ client.on('message', function (topic, message) {
               }
               break;
             default:
-              console.log('received message in unexpected topic: ' + topic);
-              console.log(JSON.stringify(message));
+              logger.warn('received message in unexpected topic: ' + topic);
+              logger.debug(JSON.stringify(message));
               break;
           }
           break;
@@ -465,18 +474,18 @@ client.on('message', function (topic, message) {
           motion_toggle_light(atopic[2], message);
           break;
         case 'switch':
-          //console.log('received message in topic: ' + topic);
-          //console.log(JSON.stringify(message));
+          logger.info('received message in topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
         default:
-          console.log('received message in unexpected topic: ' + topic);
-          console.log(JSON.stringify(message));
+          logger.warn('received message in unexpected topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
       }
       break;
     default:
-      console.log('received message in unexpected topic: ' + topic);
-      console.log(JSON.stringify(message));
+      logger.warn('received message in unexpected topic: ' + topic);
+      logger.debug(JSON.stringify(message));
       break;
   }
 

@@ -1,6 +1,6 @@
 FROM node:14.15.4-alpine3.12
 
-RUN npm install mqtt suncalc yaml --save
+RUN npm install mqtt suncalc winston yaml --save
 
 WORKDIR /app
 
