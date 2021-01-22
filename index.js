@@ -1,31 +1,46 @@
 const fs = require('fs');
-const yaml = require('yaml');
 const http = require('http');
 const mqtt = require('mqtt');
 const suncalc = require('suncalc');
+const winston = require('winston');
+const yaml = require('yaml');
+
+var level = 'info';
+if (process.env.LOG_LEVEL !== undefined) {
+  level = process.env.LOG_LEVEL;
+}
+const levels = ['info', 'error', 'warn', 'debug'];
+if (!(levels.includes(level))) {
+  console.log(level + ' is not a valid log_level, use one of ' + levels.join(', '));
+}
+
+const logger = winston.createLogger({
+  level: level,
+  transports: [new winston.transports.Console()]
+});
 
 if (fs.existsSync('./config.yml')) {
   var config = yaml.parse(fs.readFileSync('./config.yml', 'utf8'));
 } else {
   var config = {
+    brightness: {
+      down: 18,
+      up: 6,
+      z: 2.54
+    },
     http_addr: '0.0.0.0',
     http_port: 8080,
+    latitude: 0,
+    longitude: 0,
     mqtt_server: 'mqtt://127.0.0.1:1883',
     options: {
+      password: '',
       protocolVersion: 5,
-      username: '',
-      password: ''
+      username: ''
     },
     publish_options: {
       qos: 0
     },
-    brightness: {
-      up: 6,
-      down: 18,
-      z: 2.54
-    },
-    latitude: 0,
-    longitude: 0,
     topics: [],
     unnecessary_payloads: []
   };
@@ -46,6 +61,30 @@ function handleQuit() {
     http_server.close();
     client.end();
   }
+}
+
+function sortJSON(object) {
+  if (object instanceof Array) {
+    for (var i = 0; i < object.length; i++) {
+      object[i] = sortJSON(object[i]);
+    }
+    return object;
+  } else {
+    if (typeof object != "object") {
+      return object;
+    }
+  }
+  var keys = Object.keys(object);
+  keys = keys.sort();
+  var newObject = {};
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i] != 'sunTimes') {
+      newObject[keys[i]] = sortJSON(object[keys[i]]);
+    } else {
+      newObject[keys[i]] = object[keys[i]];
+    }
+  }
+  return newObject;
 }
 
 function state_topic_exist(topic) {
@@ -73,13 +112,12 @@ function drop_unnecessary_payload(message, payload) {
 
 function save_occupancy_timeouts(message) {
   for (var device in message.config.devices) {
-    var timeouts = message.config.devices[device]['no_occupancy_since'];
-    if ( timeouts !== undefined ) {
+    if ( message.config.devices[device]['no_occupancy_since'] !== undefined ) {
       var topic = message.config.devices[device]['friendly_name'];
       topic = topic.split("/")[1];
       if ( topic !== undefined ) {
         state_topic_exist(topic);
-        state[topic]['occupancy_timeouts'] = timeouts;
+        state[topic]['occupancy_timeouts'] = message.config.devices[device]['no_occupancy_since'];
       }
     }
   }
@@ -93,6 +131,7 @@ function save_state(topic, message) {
   } else {
     state[topic] = message;
   }
+  state = sortJSON(state);
 }
 
 function save_state_fs() {
@@ -113,7 +152,7 @@ function updateSunTimes() {
 function brightness(topic) {
   var brightness = 254;
   if (state_topic_exist(topic)) {
-    if (state[topic]['adaptive_brightness'] === 'ON') {
+    if (state[topic.split('_')[0]]['adaptive_brightness'] === 'ON') {
       brightness = state.adaptive_brightness;
     }
   }
@@ -189,11 +228,11 @@ function update_adaptive_brightness() {
     if (light.split('_')[1] !== undefined) {
       if ( (state[light]['state'] === 'ON')
         && (state[light.split('_')[0]]['adaptive_brightness'] === 'ON') ) {
-        var message = {brightness: brightness(topic)};
+        var message = {brightness: brightness(light)};
         if ( (state[light]['dimmed'] !== true)
           && (state[light]['brightness'] !== message.brightness) ) {
-          var new_topic = 'z2m_cc2652p/light/' + light + '/set';
-          client.publish(new_topic, JSON.stringify(message), config.publish_options);
+          var topic = 'z2m_cc2652p/light/' + light + '/set';
+          client.publish(topic, JSON.stringify(message), config.publish_options);
         }
       }
     }
@@ -249,10 +288,10 @@ function turn_on_light(topic, bulb) {
 }
 
 function dim_light(topic, percent, bulb) {
-  var message = {};
-  message.brightness = brightness(topic);
-  message.brightness = Math.round(message.brightness * percent * 100);
   if (bulb !== undefined) {
+    var message = {};
+    message.brightness = brightness(topic);
+    message.brightness = Math.round(message.brightness * percent * 100);
     topic = topic + '_' + bulb;
     if (state_topic_exist(topic) === true) {
       if ( (state[topic]['state'] === 'ON')
@@ -303,56 +342,84 @@ function motion_toggle_light(topic, message) {
         && (state.night === true) ) ) {
       state_topic_exist(topic);
       state[topic]['motion'] = true;
-      if ( (config.motion[topic] !== undefined)
-        && (config.motion[topic][toggleable_lights] !== undefined) ) {
-        for (var bulb of config.motion[topic][toggleable_lights]) {
-          turn_on_light(topic, bulb);
+      if (config.motion[topic] !== undefined) {
+        if (config.motion[topic]['toggleable_lights'] !== undefined) {
+          for (var bulb of config.motion[topic]['toggleable_lights']) {
+            logger.info('turning on light ' + topic + ' ' + bulb);
+            turn_on_light(topic, bulb);
+          }
+        } else {
+          logger.info('turning on light ' + topic);
+          turn_on_light(topic);
         }
       } else {
+        logger.info('turning on light ' + topic);
         turn_on_light(topic);
       }
     }
   } else if (message.no_occupancy_since !== undefined) {
     if (state_topic_exist(topic)) {
-      var timeouts = state[topic]['occupancy_timeouts'];
-      if ( (timeouts !== undefined)
+      if ( (state[topic]['occupancy_timeouts'] !== undefined)
         && (state[topic]['motion'] === true) ) {
-        if (timeouts.length > 1) {
-          if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
-            state[topic]['motion'] = false;
-            if ( (config.motion[topic] !== undefined)
-              && (config.motion[topic][toggleable_lights] !== undefined) ) {
-              for (var bulb of config.motion[topic][toggleable_lights]) {
+        var timeouts = state[topic]['occupancy_timeouts'];
+        if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
+          state[topic]['motion'] = false;
+          if (config.motion[topic] !== undefined) {
+            if (config.motion[topic]['toggleable_lights'] !== undefined) {
+              for (var bulb of config.motion[topic]['toggleable_lights']) {
+                logger.info('turning off light ' + topic + ' ' + bulb);
                 turn_off_light(topic, bulb);
               }
             } else {
+              logger.info('turning off light ' + topic);
               turn_off_light(topic);
             }
           } else {
-            for (var timeout in timeouts) {
-              if (message.no_occupancy_since === timeouts[timeout]) {
-                var percent = 1 - ((timeout + 1) / timeouts.length);
-                if ( (config.motion[topic] !== undefined)
-                  && (config.motion[topic][toggleable_lights] !== undefined) ) {
-                  for (var bulb of config.motion[topic][toggleable_lights]) {
+            logger.info('turning off light ' + topic);
+            turn_off_light(topic);
+          }
+        } else {
+          for (var timeout in timeouts) {
+            if (message.no_occupancy_since === timeouts[timeout]) {
+              var percent = 1 - ((timeout + 1) / timeouts.length);
+              if (config.motion[topic] !== undefined) {
+                if (config.motion[topic]['toggleable_lights'] !== undefined) {
+                  for (var bulb of config.motion[topic]['toggleable_lights']) {
+                    logger.info('dimming light ' + topic + ' ' + bulb);
                     dim_light(topic, percent, bulb);
                   }
                 } else {
+                  logger.info('dimming light ' + topic);
                   dim_light(topic, percent);
                 }
+              } else {
+                logger.info('dimming light ' + topic);
+                dim_light(topic, percent);
               }
             }
           }
-        } else {
-          state[topic]['motion'] = false;
-          if ( (config.motion[topic] !== undefined)
-            && (config.motion[topic][toggleable_lights] !== undefined) ) {
-            for (var bulb of config.motion[topic][toggleable_lights]) {
+        }
+      }
+    }
+  } else if (message.occupancy === false) {
+    if (state_topic_exist(topic)) {
+      if ( (state[topic]['occupancy_timeouts'] === undefined)
+        && (state[topic]['motion'] === true) ) {
+        var timeouts = state[topic]['occupancy_timeouts'];
+        state[topic]['motion'] = false;
+        if (config.motion[topic] !== undefined) {
+          if (config.motion[topic]['toggleable_lights'] !== undefined) {
+            for (var bulb of config.motion[topic]['toggleable_lights']) {
+              logger.info('turning off light ' + topic + ' ' + bulb);
               turn_off_light(topic, bulb);
             }
           } else {
+            logger.info('turning off light ' + topic);
             turn_off_light(topic);
           }
+        } else {
+          logger.info('turning off light ' + topic);
+          turn_off_light(topic);
         }
       }
     }
@@ -394,8 +461,8 @@ client.on('message', function (topic, message) {
           }
           break;
         default:
-          console.log('received message in unexpected topic: ' + topic);
-          console.log(JSON.stringify(message));
+          logger.warn('received message in unexpected topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
       }
       break;
@@ -415,8 +482,8 @@ client.on('message', function (topic, message) {
               }
               break;
             default:
-              console.log('received message in unexpected topic: ' + topic);
-              console.log(JSON.stringify(message));
+              logger.warn('received message in unexpected topic: ' + topic);
+              logger.debug(JSON.stringify(message));
               break;
           }
           break;
@@ -428,18 +495,18 @@ client.on('message', function (topic, message) {
           motion_toggle_light(atopic[2], message);
           break;
         case 'switch':
-          //console.log('received message in topic: ' + topic);
-          //console.log(JSON.stringify(message));
+          logger.info('received message in topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
         default:
-          console.log('received message in unexpected topic: ' + topic);
-          console.log(JSON.stringify(message));
+          logger.warn('received message in unexpected topic: ' + topic);
+          logger.debug(JSON.stringify(message));
           break;
       }
       break;
     default:
-      console.log('received message in unexpected topic: ' + topic);
-      console.log(JSON.stringify(message));
+      logger.warn('received message in unexpected topic: ' + topic);
+      logger.debug(JSON.stringify(message));
       break;
   }
 
