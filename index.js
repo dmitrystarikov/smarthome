@@ -402,23 +402,25 @@ function motion_toggle_light(topic, message) {
       }
     }
   } else if (message.occupancy === false) {
-    if ( (state[topic]['occupancy_timeouts'] === undefined)
-      && (state[topic]['motion'] === true) ) {
-      var timeouts = state[topic]['occupancy_timeouts'];
-      state[topic]['motion'] = false;
-      if (config.motion[topic] !== undefined) {
-        if (config.motion[topic]['toggleable_lights'] !== undefined) {
-          for (var bulb of config.motion[topic]['toggleable_lights']) {
-            logger.info('turning off light ' + topic + ' ' + bulb);
-            turn_off_light(topic, bulb);
+    if (state_topic_exist(topic)) {
+      if ( (state[topic]['occupancy_timeouts'] === undefined)
+        && (state[topic]['motion'] === true) ) {
+        var timeouts = state[topic]['occupancy_timeouts'];
+        state[topic]['motion'] = false;
+        if (config.motion[topic] !== undefined) {
+          if (config.motion[topic]['toggleable_lights'] !== undefined) {
+            for (var bulb of config.motion[topic]['toggleable_lights']) {
+              logger.info('turning off light ' + topic + ' ' + bulb);
+              turn_off_light(topic, bulb);
+            }
+          } else {
+            logger.info('turning off light ' + topic);
+            turn_off_light(topic);
           }
         } else {
           logger.info('turning off light ' + topic);
           turn_off_light(topic);
         }
-      } else {
-        logger.info('turning off light ' + topic);
-        turn_off_light(topic);
       }
     }
   }
