@@ -112,13 +112,12 @@ function drop_unnecessary_payload(message, payload) {
 
 function save_occupancy_timeouts(message) {
   for (var device in message.config.devices) {
-    var timeouts = message.config.devices[device]['no_occupancy_since'];
-    if ( timeouts !== undefined ) {
+    if ( message.config.devices[device]['no_occupancy_since'] !== undefined ) {
       var topic = message.config.devices[device]['friendly_name'];
       topic = topic.split("/")[1];
       if ( topic !== undefined ) {
         state_topic_exist(topic);
-        state[topic]['occupancy_timeouts'] = timeouts;
+        state[topic]['occupancy_timeouts'] = message.config.devices[device]['no_occupancy_since'];
       }
     }
   }
@@ -360,9 +359,9 @@ function motion_toggle_light(topic, message) {
     }
   } else if (message.no_occupancy_since !== undefined) {
     if (state_topic_exist(topic)) {
-      var timeouts = state[topic]['occupancy_timeouts'];
-      if ( (timeouts !== undefined)
+      if ( (state[topic]['occupancy_timeouts'] !== undefined)
         && (state[topic]['motion'] === true) ) {
+        var timeouts = state[topic]['occupancy_timeouts'];
         if (message.no_occupancy_since === timeouts[timeouts.length - 1]) {
           state[topic]['motion'] = false;
           if (config.motion[topic] !== undefined) {
@@ -403,9 +402,9 @@ function motion_toggle_light(topic, message) {
       }
     }
   } else if (message.occupancy === false) {
-    var timeouts = state[topic]['occupancy_timeouts'];
-    if ( (timeouts === undefined)
+    if ( (state[topic]['occupancy_timeouts'] === undefined)
       && (state[topic]['motion'] === true) ) {
+      var timeouts = state[topic]['occupancy_timeouts'];
       state[topic]['motion'] = false;
       if (config.motion[topic] !== undefined) {
         if (config.motion[topic]['toggleable_lights'] !== undefined) {
